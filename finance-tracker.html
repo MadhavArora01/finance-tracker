@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance Task Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f5f4f0;color:#1a1a18;min-height:100vh}
+.topbar{background:#fff;border-bottom:1px solid #e0deda;padding:0 2rem;display:flex;align-items:stretch;justify-content:space-between}
+.topbar-left{display:flex;align-items:stretch}
+.top-tab{padding:1rem 1.5rem;border:none;border-bottom:3px solid transparent;background:transparent;cursor:pointer;font-size:14px;font-weight:500;color:#888;white-space:nowrap}
+.top-tab:hover{color:#333}
+.top-tab.active{color:#185FA5;border-bottom-color:#185FA5}
+.save-lbl{font-size:11px;color:#bbb;display:flex;align-items:center}
+.page{display:none;padding:2rem}
+.page.active{display:block}
+.tasks-page-inner{max-width:900px;margin:0 auto}
+
+/* calendar */
+.cal-wrap{margin-bottom:2rem}
+.cal-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem}
+.cal-header h2{font-size:17px;font-weight:600;flex:1;text-align:center}
+.cal-nav{padding:6px 14px;border:1px solid #e0deda;border-radius:7px;background:#fff;cursor:pointer;font-size:14px;color:#333}
+.cal-nav:hover{background:#f0eeea}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-day-name{text-align:center;font-size:11px;color:#aaa;padding:.4rem 0;text-transform:uppercase;letter-spacing:.05em}
+.cal-cell{min-height:72px;background:#fff;border:1px solid #e8e6e0;border-radius:9px;padding:7px 9px;cursor:pointer;transition:border-color .15s,background .15s}
+.cal-cell:hover{border-color:#bbb;background:#fafaf8}
+.cal-cell.empty{background:transparent;border-color:transparent;cursor:default;pointer-events:none}
+.cal-cell.other-month{background:#fafaf8;opacity:.5;pointer-events:none}
+.cal-cell.today{border-color:#185FA5;background:#f0f6ff}
+.cal-cell.month-start{border-color:#E24B4A;background:#fffafa}
+.cal-cell.month-start:hover{background:#fff5f5}
+.cal-cell.has-tasks:not(.month-start){border-color:#639922}
+.cal-cell.selected{box-shadow:0 0 0 2.5px #185FA5}
+.cal-cell.before-june{opacity:.4;pointer-events:none;background:#f5f4f0}
+.cal-date{font-size:13px;font-weight:500;color:#555}
+.cal-cell.today .cal-date{color:#185FA5;font-weight:700}
+.cal-cell.month-start .cal-date{color:#A32D2D;font-weight:700}
+.me-badge{font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:4px;padding:1px 5px;margin-top:3px;display:inline-block}
+.cal-pips{margin-top:5px;display:flex;gap:3px;align-items:center;flex-wrap:wrap}
+.pip{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pip-done{background:#639922}.pip-pending{background:#EF9F27}.pip-overdue{background:#E24B4A}
+.pip-hold{background:#888}.pip-progress{background:#185FA5}
+.cal-count{font-size:10px;color:#aaa;margin-left:1px}
+
+/* task panel */
+.task-panel{background:#fff;border:1px solid #e0deda;border-radius:12px;padding:1.5rem}
+.panel-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:1rem}
+.panel-title{font-size:16px;font-weight:600;color:#1a1a18}
+.panel-meta{font-size:12px;color:#888;margin-top:2px}
+.progress-row{display:flex;justify-content:space-between;font-size:11px;color:#aaa;margin-bottom:.3rem}
+.progress-wrap{height:6px;background:#e8e6e0;border-radius:3px;overflow:hidden;margin-bottom:1.25rem}
+.progress-fill{height:6px;border-radius:3px;transition:width .4s}
+.section-hdr{font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:.08em;margin:1rem 0 .5rem;font-weight:600}
+.fixed-note{font-size:11px;color:#0C447C;background:#E6F1FB;border-radius:6px;padding:.5rem .75rem;margin-bottom:1rem}
+.carried-box{background:#fff9f9;border:1px solid #fdd;border-radius:8px;padding:8px;margin-bottom:.75rem}
+
+/* task rows */
+.task-row{border:1px solid #e8e6e0;border-radius:8px;background:#fff;margin-bottom:5px;transition:border-color .15s}
+.task-row:hover{border-color:#ccc}
+.task-row.overdue-row{border-left:3px solid #E24B4A}
+.task-row.hold-row{border-left:3px solid #888}
+.task-row.progress-row{border-left:3px solid #185FA5}
+.task-main{display:flex;align-items:center;gap:7px;padding:9px 11px;min-width:0}
+.task-sub{font-size:11px;padding:4px 12px 6px 40px;border-radius:0 0 8px 8px}
+.task-sub.reason{color:#A32D2D;background:#FCEBEB}
+.task-sub.hold{color:#5F5E5A;background:#F1EFE8}
+.chk{width:18px;height:18px;border-radius:4px;border:1.5px solid #ccc;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
+.chk.done{background:#eaf3de;border-color:#639922}
+.chk svg{display:none}.chk.done svg{display:block}
+.task-name{flex:1;font-size:13px;color:#1a1a18;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.task-name.done{text-decoration:line-through;color:#bbb}
+.badge{font-size:10px;padding:2px 7px;border-radius:5px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.b-done{background:#eaf3de;color:#27500A}
+.b-pending{background:#FAEEDA;color:#633806}
+.b-inprogress{background:#E6F1FB;color:#0C447C}
+.b-onhold{background:#F1EFE8;color:#444441}
+.b-other{background:#FCEBEB;color:#A32D2D}
+.b-fixed{background:#E6F1FB;color:#0C447C}
+.b-misc{background:#EEEDFE;color:#3C3489}
+.due-chip{font-size:10px;padding:2px 7px;border-radius:5px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.due-ok{background:#eaf3de;color:#27500A}
+.due-soon{background:#FAEEDA;color:#633806}
+.due-late{background:#FCEBEB;color:#A32D2D}
+.due-none{background:#F1EFE8;color:#5F5E5A}
+.icon-btn{padding:4px 7px;border:1px solid #e0deda;border-radius:6px;background:transparent;cursor:pointer;color:#888;font-size:12px;flex-shrink:0;line-height:1}
+.icon-btn:hover{background:#f0eeea;color:#333;border-color:#bbb}
+.icon-btn.del:hover{color:#E24B4A;border-color:#E24B4A}
+.edit-input{font-size:13px;flex:1;min-width:0;padding:3px 8px;border-radius:5px;border:1px solid #bbb;background:#fafaf8;color:#1a1a18;outline:none}
+.no-task-msg{text-align:center;padding:2rem 1rem;color:#bbb;font-size:13px}
+
+/* add form */
+.add-area{margin-top:1.25rem;padding:1.25rem;background:#f9f8f5;border:1px solid #e8e6e0;border-radius:10px}
+.add-area-title{font-size:11px;font-weight:600;color:#555;margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.05em}
+.add-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.add-form input,.add-form select{font-size:13px;padding:7px 10px;border-radius:7px;border:1px solid #ddd;background:#fff;color:#1a1a18;outline:none;width:100%}
+.add-form input:focus,.add-form select:focus{border-color:#378ADD}
+.add-form .full{grid-column:1/-1}
+.add-btn{padding:8px 18px;border-radius:7px;border:none;background:#185FA5;color:#fff;cursor:pointer;font-size:13px;font-weight:500}
+.add-btn:hover{background:#0C447C}
+
+/* dashboard */
+.dash-inner{max-width:900px;margin:0 auto}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.75rem}
+.stat-card{background:#fff;border:1px solid #e0deda;border-radius:10px;padding:1rem 1.25rem}
+.stat-card .lbl{font-size:11px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.stat-card .val{font-size:26px;font-weight:700}
+.v-total{color:#1a1a18}.v-done{color:#27500A}.v-pending{color:#633806}.v-overdue{color:#A32D2D}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.5rem}
+.chart-card{background:#fff;border:1px solid #e0deda;border-radius:10px;padding:1.25rem}
+.chart-card h3{font-size:11px;font-weight:600;color:#888;margin-bottom:1rem;text-transform:uppercase;letter-spacing:.05em}
+.dash-section{margin-bottom:1.5rem}
+.dash-section h2{font-size:14px;font-weight:600;margin-bottom:.75rem;color:#333}
+.month-row{display:flex;align-items:center;gap:10px;padding:.6rem .75rem;background:#fff;border:1px solid #e8e6e0;border-radius:7px;margin-bottom:4px}
+.month-bar-wrap{width:100px;height:6px;background:#e8e6e0;border-radius:3px;overflow:hidden}
+.month-bar-fill{height:6px;border-radius:3px;background:#185FA5}
+.month-pct{font-size:12px;color:#888;min-width:32px;text-align:right}
+
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:#1a1a18;color:#fff;padding:.65rem 1.25rem;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:99}
+.toast.show{opacity:1}
+@media(max-width:640px){.add-form{grid-template-columns:1fr}.add-form .full{grid-column:1}.chart-grid{grid-template-columns:1fr}.page{padding:1rem}.topbar{padding:0 1rem}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <button class="top-tab active" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="top-tab" onclick="switchTab('tasks')">Tasks</button>
+  </div>
+  <div class="topbar-right" style="display:flex;align-items:center;padding-right:0">
+    <span class="save-lbl" id="save-lbl"></span>
+  </div>
+</div>
+
+<div class="page active" id="page-dashboard">
+  <div class="dash-inner">
+    <div class="stat-grid" id="dash-stats"></div>
+    <div class="dash-section">
+      <h2>Monthly task progress (from June 2026)</h2>
+      <div id="dash-months"></div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card"><h3>Status breakdown</h3><canvas id="pie-chart" height="200"></canvas></div>
+      <div class="chart-card"><h3>Done vs remaining by month</h3><canvas id="bar-chart" height="200"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-tasks">
+  <div class="tasks-page-inner">
+    <div class="cal-wrap">
+      <div class="cal-header">
+        <button class="cal-nav" onclick="prevMonth()">&#8592;</button>
+        <h2 id="cal-title"></h2>
+        <button class="cal-nav" onclick="nextMonth()">&#8594;</button>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <div id="task-panel-wrap"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---- CONSTANTS ----
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const STATUSES = ['pending','inprogress','onhold','other','done'];
+const STATUS_LABELS = {pending:'Pending',inprogress:'In Progress',onhold:'On Hold',other:'Other',done:'Done'};
+
+// Start boundary: June 2026
+const START_YEAR = 2026;
+const START_MONTH = 5; // 0-indexed = June
+const START_BOUNDARY = '2026-06-01'; // nothing before this date is tracked
+
+const _n = new Date(); const todayStr = _n.getFullYear() + '-' + String(_n.getMonth()+1).padStart(2,'0') + '-' + String(_n.getDate()).padStart(2,'0');
+let viewYear = 2026;
+let viewMonth = 5; // start on June 2026
+let selectedDate = null;
+let editingId = null;
+
+// ---- STORAGE ----
+// data: { 'YYYY-MM-DD': { tasks: [...] } }
+// monthlyTemplateTasks: array of {id, name} — the master list of tasks for every 1st
+// These are the 10 fixed + any user-added on a 1st
+function loadData() { try { return JSON.parse(localStorage.getItem('ft-v6-data') || '{}'); } catch(e){ return {}; } }
+function loadTemplate() { 
+  try { 
+    const t = JSON.parse(localStorage.getItem('ft-v6-tmpl') || 'null');
+    if (t) return t;
+  } catch(e){}
+  // Default fixed tasks
+  return [
+    {id:'f1',name:'Interest Calc for C01 C02',fixed:true},
+    {id:'f2',name:'Intercompany reconciliation & Postings',fixed:true},
+    {id:'f3',name:'CFA Journal C01',fixed:true},
+    {id:'f4',name:'VAT Code Check',fixed:true},
+    {id:'f5',name:'Revenue recognition review',fixed:true},
+    {id:'f6',name:'Close subledgers (AP)',fixed:true},
+    {id:'f7',name:'Close subledgers (AR & Cash)',fixed:true},
+    {id:'f8',name:'Close Nominal Ledger',fixed:true},
+    {id:'f9',name:'Balance sheet Rec MAC 1 90002',fixed:true},
+    {id:'f10',name:'Balance sheet Rec ADVT 90001',fixed:true},
+    {id:'f11',name:'Close AR & Cash for 90001 & 90002',fixed:true},
+    {id:'f12',name:'Close NML for 90001 & 90002',fixed:true},
+    {id:'f13',name:'Back shared With BU',fixed:true}
+  ];
+}
+
+let data = loadData();
+let templateTasks = loadTemplate();
+let nextId = parseInt(localStorage.getItem('ft-v6-nid') || '2000');
+
+function newId() { nextId++; localStorage.setItem('ft-v6-nid', nextId); return nextId; }
+
+function persist() {
+  localStorage.setItem('ft-v6-data', JSON.stringify(data));
+  localStorage.setItem('ft-v6-tmpl', JSON.stringify(templateTasks));
+  document.getElementById('save-lbl').textContent = 'Saved ' + new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ---- DATE HELPERS ----
+function isMonthStart(dateStr) { return dateStr && dateStr.slice(8) === '01'; }
+function isBeforeJune2026(dateStr) { return dateStr < START_BOUNDARY; }
+function dateLabel(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  return Math.round((new Date(dateStr) - new Date(todayStr)) / 86400000);
+}
+function dueBadge(t) {
+  if (t.status === 'done' || !t.dueDate) return `<span class="due-chip due-none">No due date</span>`;
+  const d = daysUntil(t.dueDate);
+  if (d < 0) return `<span class="due-chip due-late">${Math.abs(d)}d overdue</span>`;
+  if (d === 0) return `<span class="due-chip due-late">Due today</span>`;
+  if (d <= 3) return `<span class="due-chip due-soon">${d}d left</span>`;
+  return `<span class="due-chip due-ok">${d}d left</span>`;
+}
+
+// ---- MONTH-START TASK MANAGEMENT ----
+// Ensure a month-start date has all template tasks initialised (only if not already set up)
+function ensureMonthStart(dateStr) {
+  if (!data[dateStr]) data[dateStr] = { tasks: [], isMonthStart: true };
+  const d = data[dateStr];
+  if (!d.isMonthStart) d.isMonthStart = true;
+  // Add any template tasks not yet present (by template id)
+  const existingTplIds = new Set(d.tasks.filter(t=>t.tplId).map(t=>t.tplId));
+  templateTasks.forEach(tpl => {
+    if (!existingTplIds.has(tpl.id)) {
+      d.tasks.push({ id: newId(), tplId: tpl.id, name: tpl.name, status: 'pending', fixed: tpl.fixed || false, dueDate: dateStr, otherReason: '', holdReason: '' });
+    }
+  });
+  persist();
+}
+
+// ---- CARRIED FORWARD ----
+// All incomplete tasks from any past date (before today)
+function getCarriedForward() {
+  const carried = [];
+  Object.entries(data).forEach(([dateStr, day]) => {
+    if (dateStr >= todayStr) return;
+    day.tasks.forEach(t => {
+      if (t.status !== 'done') {
+        const daysLate = Math.round((new Date(todayStr) - new Date(dateStr)) / 86400000);
+        carried.push({ ...t, _originDate: dateStr, _daysLate: daysLate });
+      }
+    });
+  });
+  // Sort: oldest first
+  carried.sort((a,b) => a._originDate.localeCompare(b._originDate));
+  return carried;
+}
+
+// ---- TAB SWITCHING ----
+function switchTab(tab) {
+  document.querySelectorAll('.top-tab').forEach((b,i) => b.classList.toggle('active',(i===0&&tab==='dashboard')||(i===1&&tab==='tasks')));
+  document.getElementById('page-dashboard').classList.toggle('active', tab==='dashboard');
+  document.getElementById('page-tasks').classList.toggle('active', tab==='tasks');
+  if (tab==='dashboard') renderDashboard();
+  if (tab==='tasks') renderCal();
+}
+
+// ---- CALENDAR ----
+function prevMonth() {
+  viewMonth--; if(viewMonth<0){viewMonth=11;viewYear--;}
+  // Don't go before June 2026
+  if(viewYear < START_YEAR || (viewYear===START_YEAR && viewMonth < START_MONTH)){viewYear=START_YEAR;viewMonth=START_MONTH;}
+  renderCal();
+}
+function nextMonth() { viewMonth++; if(viewMonth>11){viewMonth=0;viewYear++;} renderCal(); }
+
+function renderCal() {
+  document.getElementById('cal-title').textContent = MONTH_NAMES[viewMonth] + ' ' + viewYear;
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  const startOffset = (firstDay + 6) % 7;
+
+  let html = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="cal-day-name">${d}</div>`).join('');
+  for(let i=0;i<startOffset;i++) html += `<div class="cal-cell empty"></div>`;
+
+  for(let d=1; d<=daysInMonth; d++) {
+    const mm = String(viewMonth+1).padStart(2,'0');
+    const dd = String(d).padStart(2,'0');
+    const dateStr = `${viewYear}-${mm}-${dd}`;
+    const isStart = d === 1;
+    const isToday = dateStr === todayStr;
+    const isSelected = dateStr === selectedDate;
+    const isBefore = isBeforeJune2026(dateStr);
+    const tasks = data[dateStr] ? data[dateStr].tasks : [];
+    const hasTasks = tasks.length > 0;
+    const doneCnt = tasks.filter(t=>t.status==='done').length;
+    const pendingCnt = tasks.filter(t=>t.status==='pending').length;
+    const progressCnt = tasks.filter(t=>t.status==='inprogress').length;
+    const holdCnt = tasks.filter(t=>t.status==='onhold'||t.status==='other').length;
+    const overdueCnt = tasks.filter(t=>t.status!=='done'&&t.dueDate&&t.dueDate<todayStr).length;
+    const carriedCount = isToday ? Object.entries(data).filter(([ds])=>ds<todayStr).reduce((n,[,day])=>n+day.tasks.filter(t=>t.status!=='done').length,0) : 0;
+
+    let cls = 'cal-cell';
+    if (isBefore) cls += ' before-june';
+    else {
+      if (isToday) cls += ' today';
+      if (isStart) cls += ' month-start';
+      if (hasTasks && !isStart) cls += ' has-tasks';
+      if (isSelected) cls += ' selected';
+    }
+
+    let inner = `<div class="cal-date">${d}</div>`;
+    if (isStart && !isBefore) inner += `<div class="me-badge">Month tasks</div>`;
+    if ((hasTasks || carriedCount > 0) && !isBefore) {
+      inner += `<div class="cal-pips">`;
+      if (doneCnt) inner += `<span class="pip pip-done"></span>`;
+      if (progressCnt) inner += `<span class="pip pip-progress"></span>`;
+      if (pendingCnt) inner += `<span class="pip pip-pending"></span>`;
+      if (holdCnt) inner += `<span class="pip pip-hold"></span>`;
+      if (overdueCnt || carriedCount) inner += `<span class="pip pip-overdue"></span>`;
+      inner += `<span class="cal-count">${doneCnt}/${tasks.length}${carriedCount?` +${carriedCount}&#8593;`:''}</span></div>`;
+    }
+    const clickable = isBefore ? '' : `onclick="selectDate('${dateStr}')"`;
+    html += `<div class="${cls}" ${clickable}>${inner}</div>`;
+  }
+
+  document.getElementById('cal-grid').innerHTML = html;
+  if (selectedDate) renderTaskPanel();
+  else document.getElementById('task-panel-wrap').innerHTML = '';
+}
+
+function selectDate(dateStr) {
+  if (isBeforeJune2026(dateStr)) return;
+  selectedDate = dateStr;
+  editingId = null;
+  if (isMonthStart(dateStr)) ensureMonthStart(dateStr);
+  else if (!data[dateStr]) data[dateStr] = { tasks: [] };
+  renderCal();
+}
+
+// ---- TASK PANEL ----
+function renderTaskPanel() {
+  const wrap = document.getElementById('task-panel-wrap');
+  if (!selectedDate) { wrap.innerHTML=''; return; }
+  if (isMonthStart(selectedDate)) ensureMonthStart(selectedDate);
+  const day = data[selectedDate] || { tasks:[] };
+  const tasks = day.tasks;
+  const isToday = selectedDate === todayStr;
+  const carried = isToday ? getCarriedForward() : [];
+  const done = tasks.filter(t=>t.status==='done').length;
+  const total = tasks.length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  const color = isMonthStart(selectedDate) ? '#185FA5' : '#639922';
+  const dlabel = dateLabel(selectedDate);
+
+  let html = `<div class="task-panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title">${isMonthStart(selectedDate) ? '1st — Monthly tasks &mdash; ' + MONTH_NAMES[parseInt(selectedDate.slice(5,7))-1] + ' ' + selectedDate.slice(0,4) : dlabel}</div>
+        <div class="panel-meta">${dlabel} &nbsp;·&nbsp; ${done}/${total} done${carried.length ? ` &nbsp;·&nbsp; <span style="color:#A32D2D;font-weight:500">${carried.length} carried forward</span>` : ''}</div>
+      </div>
+    </div>`;
+
+  if (total > 0) {
+    html += `<div class="progress-row"><span>${done} of ${total} done</span><span>${pct}%</span></div>
+    <div class="progress-wrap"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>`;
+  }
+
+  if (isMonthStart(selectedDate)) {
+    html += `<div class="fixed-note">Tasks on the 1st are shared across all months. <strong>Add, edit or delete here</strong> and it applies to every future month's 1st automatically. Past months are never changed.</div>`;
+  }
+
+  // Carried forward (today only)
+  if (carried.length) {
+    html += `<div class="section-hdr" style="color:#A32D2D">&#9650; Carried forward (${carried.length} incomplete from previous days)</div>
+    <div class="carried-box">`;
+    carried.forEach(t => { html += carriedRowHtml(t); });
+    html += `</div>`;
+  }
+
+  const pending = tasks.filter(t=>t.status!=='done');
+  const completed = tasks.filter(t=>t.status==='done');
+
+  if (pending.length) {
+    html += `<div class="section-hdr">${isToday ? "Today's tasks — to do" : "To do"}</div>`;
+    pending.forEach(t => { html += taskRowHtml(t, selectedDate); });
+  }
+  if (completed.length) {
+    html += `<div class="section-hdr">Completed</div>`;
+    completed.forEach(t => { html += taskRowHtml(t, selectedDate); });
+  }
+  if (!total && !carried.length) html += `<div class="no-task-msg">No tasks yet — add one below.</div>`;
+
+  html += addFormHtml() + `</div>`;
+  wrap.innerHTML = html;
+  if (editingId) { const inp=document.getElementById('ei-'+editingId); if(inp){inp.focus();inp.select();} }
+  updateAddFormVis();
+}
+
+function taskRowHtml(t, dateStr) {
+  const editing = editingId === t.id;
+  const stClass = t.status==='onhold'?'hold-row':t.status==='inprogress'?'progress-row':(t.status!=='done'&&t.dueDate&&t.dueDate<todayStr)?'overdue-row':'';
+
+  const nameHtml = editing
+    ? `<input class="edit-input" id="ei-${t.id}" value="${t.name.replace(/"/g,'&quot;')}" onkeydown="if(event.key==='Enter')saveEdit(${t.id},'${dateStr}');if(event.key==='Escape')cancelEdit()" />`
+    : `<span class="task-name ${t.status==='done'?'done':''}">${t.name}</span>`;
+
+  const statusEl = editing
+    ? `<select onchange="changeStatus('${dateStr}',${t.id},this.value)" style="font-size:11px;padding:2px 5px;border-radius:5px;border:1px solid #ddd;background:#fff;color:#1a1a18">
+        ${STATUSES.map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}
+       </select>`
+    : `<span class="badge b-${t.status}">${STATUS_LABELS[t.status]}</span>`;
+
+  const typeEl = `<span class="badge b-${t.fixed?'fixed':'misc'}">${t.fixed?'Fixed':'Misc'}</span>`;
+  const dueEl = editing
+    ? `<input type="date" value="${t.dueDate||''}" onchange="changeDue('${dateStr}',${t.id},this.value)" style="font-size:11px;padding:2px 6px;border-radius:5px;border:1px solid #ddd;background:#fff;color:#1a1a18">`
+    : dueBadge(t);
+
+  const btns = editing
+    ? `<button class="icon-btn" onclick="saveEdit(${t.id},'${dateStr}')" title="Save">&#10003;</button>
+       <button class="icon-btn" onclick="cancelEdit()" title="Cancel">&#10007;</button>`
+    : `<button class="icon-btn" onclick="startEdit(${t.id})" title="Edit">&#9998;</button>
+       <button class="icon-btn del" onclick="deleteTask('${dateStr}',${t.id})" title="Delete">&#128465;</button>`;
+
+  let row = `<div class="task-row ${stClass}"><div class="task-main">
+    <div class="chk ${t.status==='done'?'done':''}" onclick="toggleDone('${dateStr}',${t.id})">
+      <svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7.5L10 1" stroke="#639922" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    ${nameHtml}${typeEl}${statusEl}${dueEl}${btns}
+  </div>`;
+  if (t.status==='other'&&t.otherReason) row += `<div class="task-sub reason">Reason: ${t.otherReason}</div>`;
+  if (t.status==='onhold'&&t.holdReason) row += `<div class="task-sub hold">On hold: ${t.holdReason}</div>`;
+  row += `</div>`;
+  return row;
+}
+
+function carriedRowHtml(t) {
+  const originObj = new Date(t._originDate+'T12:00:00');
+  const originLbl = originObj.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  const stClass = t.status==='onhold'?'hold-row':t.status==='inprogress'?'progress-row':'overdue-row';
+  let row = `<div class="task-row ${stClass}" style="border-left-color:#E24B4A"><div class="task-main">
+    <div class="chk ${t.status==='done'?'done':''}" onclick="toggleDone('${t._originDate}',${t.id})">
+      <svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7.5L10 1" stroke="#639922" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <span class="task-name">${t.name}</span>
+    <span class="badge b-${t.fixed?'fixed':'misc'}">${t.fixed?'Fixed':'Misc'}</span>
+    <span class="badge b-${t.status}">${STATUS_LABELS[t.status]}</span>
+    <span class="due-chip due-late">From ${originLbl} &nbsp;&middot;&nbsp; ${t._daysLate}d overdue</span>
+    <button class="icon-btn" onclick="goToOrigin('${t._originDate}')" style="font-size:11px;padding:3px 7px">View &#8594;</button>
+  </div>`;
+  if (t.status==='other'&&t.otherReason) row += `<div class="task-sub reason">Reason: ${t.otherReason}</div>`;
+  if (t.status==='onhold'&&t.holdReason) row += `<div class="task-sub hold">On hold: ${t.holdReason}</div>`;
+  row += `</div>`;
+  return row;
+}
+
+function addFormHtml() {
+  const statusOpts = STATUSES.filter(s=>s!=='done').map(s=>`<option value="${s}">${STATUS_LABELS[s]}</option>`).join('');
+  const typeRow = isMonthStart(selectedDate)
+    ? `<select id="new-type"><option value="false">Miscellaneous</option><option value="true">Fixed</option></select>`
+    : '';
+  return `<div class="add-area">
+    <div class="add-area-title">Add task</div>
+    <div class="add-form">
+      <input class="full" id="new-name" placeholder="Task name..." onkeydown="if(event.key==='Enter')addTask()" />
+      <select id="new-status" onchange="updateAddFormVis()">${statusOpts}</select>
+      <input type="date" id="new-due" />
+      ${typeRow}
+      <input class="full" id="new-other" placeholder="Reason (e.g. sitting with John, awaiting approval...)" style="display:none" />
+      <input class="full" id="new-hold" placeholder="On hold reason (e.g. waiting on data from team...)" style="display:none" />
+      <div style="grid-column:1/-1;display:flex;justify-content:flex-end">
+        <button class="add-btn" onclick="addTask()">+ Add task</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function updateAddFormVis() {
+  const s = document.getElementById('new-status');
+  const o = document.getElementById('new-other');
+  const h = document.getElementById('new-hold');
+  if (!s) return;
+  if (o) o.style.display = s.value==='other'?'':'none';
+  if (h) h.style.display = s.value==='onhold'?'':'none';
+}
+
+// ---- TASK ACTIONS ----
+function toggleDone(dateStr, id) {
+  const t = data[dateStr]&&data[dateStr].tasks.find(x=>x.id===id);
+  if (!t) return;
+  t.status = t.status==='done' ? 'pending' : 'done';
+  persist(); renderCal();
+}
+function changeStatus(dateStr, id, val) {
+  const t = data[dateStr]&&data[dateStr].tasks.find(x=>x.id===id);
+  if (!t) return;
+  t.status = val; persist(); renderTaskPanel();
+}
+function changeDue(dateStr, id, val) {
+  const t = data[dateStr]&&data[dateStr].tasks.find(x=>x.id===id);
+  if (!t) return;
+  t.dueDate = val; persist();
+}
+function startEdit(id) { editingId=id; renderTaskPanel(); }
+function cancelEdit() { editingId=null; renderTaskPanel(); }
+// Returns all future month-start dateStrs >= the given date (inclusive), that already exist in data
+function futureMthStarts(fromDateStr) {
+  return Object.keys(data).filter(d => isMonthStart(d) && d >= fromDateStr && d >= START_BOUNDARY);
+}
+
+function saveEdit(id, dateStr) {
+  const inp = document.getElementById('ei-'+id);
+  if (!inp || !inp.value.trim()) { editingId=null; renderCal(); return; }
+  const newName = inp.value.trim();
+  const t = data[dateStr] && data[dateStr].tasks.find(x=>x.id===id);
+  if (!t) { editingId=null; renderCal(); return; }
+
+  if (isMonthStart(dateStr)) {
+    // Update template name
+    const tpl = templateTasks.find(x=>x.id===t.tplId);
+    if (tpl) tpl.name = newName;
+    // Propagate name to this + all future 1sts (not past)
+    futureMthStarts(dateStr).forEach(ds => {
+      const match = data[ds].tasks.find(x=>x.tplId===t.tplId);
+      if (match) match.name = newName;
+    });
+    persist(); toast('Renamed on this and all future months'); 
+  } else {
+    t.name = newName;
+    persist(); toast('Saved');
+  }
+  editingId=null; renderCal();
+}
+
+function deleteTask(dateStr, id) {
+  const t = data[dateStr] && data[dateStr].tasks.find(x=>x.id===id);
+  if (!t) return;
+
+  if (isMonthStart(dateStr)) {
+    const msg = t.tplId
+      ? 'Delete this task from this and ALL future months? Past months are not affected.'
+      : 'Delete this task?';
+    if (!confirm(msg)) return;
+    if (t.tplId) {
+      // Remove from template
+      templateTasks = templateTasks.filter(x=>x.id!==t.tplId);
+      // Remove from this + all future 1sts
+      futureMthStarts(dateStr).forEach(ds => {
+        data[ds].tasks = data[ds].tasks.filter(x=>x.tplId!==t.tplId);
+      });
+      persist(); toast('Deleted from this and all future months');
+    } else {
+      data[dateStr].tasks = data[dateStr].tasks.filter(x=>x.id!==id);
+      persist(); toast('Deleted');
+    }
+  } else {
+    if (!confirm('Delete this task?')) return;
+    data[dateStr].tasks = data[dateStr].tasks.filter(x=>x.id!==id);
+    persist(); toast('Deleted');
+  }
+  renderCal();
+}
+
+function addTask() {
+  const name = document.getElementById('new-name')?.value.trim();
+  const status = document.getElementById('new-status')?.value||'pending';
+  const dueDate = document.getElementById('new-due')?.value||'';
+  const otherReason = document.getElementById('new-other')?.value.trim()||'';
+  const holdReason = document.getElementById('new-hold')?.value.trim()||'';
+  const isFixed = document.getElementById('new-type')?.value === 'true';
+  if (!name) { toast('Enter a task name'); return; }
+
+  if (isMonthStart(selectedDate)) {
+    const tplId = 'u' + newId();
+    templateTasks.push({ id: tplId, name, fixed: isFixed });
+    futureMthStarts(selectedDate).forEach(ds => {
+      if (!data[ds]) data[ds] = { tasks:[], isMonthStart:true };
+      const exists = data[ds].tasks.find(x=>x.tplId===tplId);
+      if (!exists) {
+        data[ds].tasks.push({ id:newId(), tplId, name, status: ds===selectedDate ? status : 'pending', fixed: isFixed, dueDate: ds===selectedDate ? dueDate : ds, otherReason: ds===selectedDate ? otherReason : '', holdReason: ds===selectedDate ? holdReason : '' });
+      }
+    });
+    persist(); toast('Added to this and all future months'); renderCal();
+  } else {
+    if (!data[selectedDate]) data[selectedDate]={ tasks:[] };
+    data[selectedDate].tasks.push({ id:newId(), name, status, fixed:false, dueDate, otherReason, holdReason });
+    persist(); toast('Task added'); renderCal();
+  }
+}
+function goToOrigin(dateStr) {
+  const d = new Date(dateStr+'T12:00:00');
+  viewYear=d.getFullYear(); viewMonth=d.getMonth();
+  selectedDate=dateStr; editingId=null;
+  if (isMonthStart(dateStr)) ensureMonthStart(dateStr);
+  renderCal();
+}
+
+// ---- DASHBOARD ----
+let barC, pieC;
+function renderDashboard() {
+  const entries = Object.entries(data).filter(([d])=>d>=START_BOUNDARY);
+  let total=0,done=0,inprogress=0,onhold=0,other=0,pending=0,overdue=0;
+  entries.forEach(([d,day])=>{
+    day.tasks.forEach(t=>{
+      total++;
+      if(t.status==='done') done++;
+      else if(t.status==='inprogress') inprogress++;
+      else if(t.status==='onhold') onhold++;
+      else if(t.status==='other') other++;
+      else pending++;
+      if(t.status!=='done'&&t.dueDate&&t.dueDate<todayStr) overdue++;
+    });
+  });
+  const carriedFwd = Object.entries(data).filter(([d])=>d<todayStr&&d>=START_BOUNDARY).reduce((n,[,day])=>n+day.tasks.filter(t=>t.status!=='done').length,0);
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card"><div class="lbl">Total</div><div class="val v-total">${total}</div></div>
+    <div class="stat-card"><div class="lbl">Completed</div><div class="val v-done">${done}</div></div>
+    <div class="stat-card"><div class="lbl">In progress</div><div class="val" style="color:#185FA5">${inprogress}</div></div>
+    <div class="stat-card"><div class="lbl">Pending</div><div class="val v-pending">${pending}</div></div>
+    <div class="stat-card"><div class="lbl">On hold / Other</div><div class="val" style="color:#5F5E5A">${onhold+other}</div></div>
+    <div class="stat-card"><div class="lbl">Overdue</div><div class="val v-overdue">${overdue}</div></div>
+    <div class="stat-card" style="border-color:#fdd;background:#fff9f9"><div class="lbl" style="color:#A32D2D">Carried forward</div><div class="val v-overdue">${carriedFwd}</div></div>`;
+
+  const me1sts = entries.filter(([d])=>isMonthStart(d)).sort((a,b)=>a[0].localeCompare(b[0]));
+  let mHtml = me1sts.length===0 ? `<div style="font-size:13px;color:#bbb;padding:.5rem 0">Click a 1st on the Tasks calendar to begin tracking monthly tasks.</div>` : '';
+  me1sts.forEach(([d,day])=>{
+    const mn = parseInt(d.slice(5,7))-1;
+    const yr = d.slice(0,4);
+    const dc = day.tasks.filter(t=>t.status==='done').length;
+    const tc = day.tasks.length;
+    const pct = tc ? Math.round(dc/tc*100) : 0;
+    mHtml += `<div class="month-row">
+      <span style="flex:1;font-size:13px;font-weight:500">${MONTH_SHORT[mn]} ${yr} — monthly tasks</span>
+      <div class="month-bar-wrap"><div class="month-bar-fill" style="width:${pct}%"></div></div>
+      <span class="month-pct">${pct}%</span>
+      <span class="badge b-${pct===100?'done':'pending'}">${dc}/${tc}</span>
+    </div>`;
+  });
+  document.getElementById('dash-months').innerHTML = mHtml;
+
+  if (pieC) pieC.destroy();
+  pieC = new Chart(document.getElementById('pie-chart').getContext('2d'),{
+    type:'doughnut',
+    data:{labels:['Done','In Progress','Pending','On Hold','Other'],datasets:[{data:[done,inprogress,pending,onhold,other],backgroundColor:['#639922','#185FA5','#EF9F27','#888780','#E24B4A'],borderWidth:0}]},
+    options:{responsive:true,cutout:'62%',plugins:{legend:{labels:{font:{size:11},boxWidth:12}}}}
+  });
+
+  if (barC) barC.destroy();
+  const barLabels = me1sts.map(([d])=>MONTH_SHORT[parseInt(d.slice(5,7))-1]);
+  barC = new Chart(document.getElementById('bar-chart').getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:barLabels.length?barLabels:['No data'],
+      datasets:[
+        {label:'Done',data:me1sts.length?me1sts.map(([,d])=>d.tasks.filter(t=>t.status==='done').length):[0],backgroundColor:'#639922',borderRadius:4},
+        {label:'Remaining',data:me1sts.length?me1sts.map(([,d])=>d.tasks.filter(t=>t.status!=='done').length):[0],backgroundColor:'#e8e6e0',borderRadius:4}
+      ]
+    },
+    options:{responsive:true,plugins:{legend:{labels:{font:{size:11},boxWidth:12}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{stepSize:1,font:{size:11}}}}}
+  });
+}
+
+function toast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+renderDashboard();
+
+// On load: auto-navigate to today's date in Tasks tab so carried-forward tasks are immediately visible
+(function(){
+  const d = new Date(todayStr + 'T12:00:00');
+  viewYear = d.getFullYear();
+  viewMonth = d.getMonth();
+  selectedDate = todayStr;
+  if (!data[todayStr]) data[todayStr] = { tasks: [] };
+  if (isMonthStart(todayStr)) ensureMonthStart(todayStr);
+  // Switch to Tasks tab and render — user lands on today with carried-forward at top
+  switchTab('tasks');
+})();
+</script>
+</body>
+</html>
